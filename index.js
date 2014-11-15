@@ -1,7 +1,9 @@
 var es = require('event-stream');
-var gutil = require('gulp-util');
+var PluginError = require('gulp-util').PluginError;
 var Buffer = require('buffer').Buffer;
 var jstransform = require('jstransform');
+
+var PLUGIN_NAME = 'gulp-jstransform';
 
 module.exports = function(opt){
   function modifyFile(file){
@@ -9,7 +11,10 @@ module.exports = function(opt){
       return this.emit('data', file); // pass along
     } 
     if (file.isStream()){
-      return this.emit('error', new Error("gulp-jstransfrom: Streaming not supported"));
+      return this.emit(
+        'error', 
+        new PluginError(PLUGIN_NAME, 'Streaming not supported.')
+      );
     } 
     // Influenced by https://github.com/stoyan/etc/master/es6r/es6r.js
     var str = file.contents.toString('utf8');
@@ -24,9 +29,16 @@ module.exports = function(opt){
       visitors = visitors.concat(visitor.visitorList);
     });
    
-    var converted = jstransform.transform(visitors, str);
-    file.contents = new Buffer(converted.code);
-    this.emit('data', file);
+    try {
+      var converted = jstransform.transform(visitors, str);
+      file.contents = new Buffer(converted.code);
+      this.emit('data', file);
+    } catch(e) {
+      this.emit(
+        'error', 
+        new PluginError(PLUGIN_NAME, file.path + ': ' + e.message)
+      );
+    }
   }
 
   return es.through(modifyFile);
